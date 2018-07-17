@@ -14,11 +14,11 @@ button_pressed = 0
 
 
 class Configuration:
-    IP = "adress"
+    IP = "192.168.5.225\sql2005"
     InfoServer = "ProcessingServer"
-    TransactionServer = "BackendServer"
-    User = "username"
-    Password = "password"
+    TransactionServer = "rrr"
+    User = "terminalbox"
+    Password = "123456"
 
     ArtCode1 = '1250'
     ArtCode2 = '1250'
@@ -26,18 +26,15 @@ class Configuration:
     ArtCode4 = '1250'
 
     SareaID = 200
-    #Number for Sales Area
     SystemID = 300
-    #Number for device
     CurrencyID = 6
-    #Currency number in Market+
     AccountTypeID = 3
     TransTypeID = 0
     AutoCreateAccountID = 0
     AccountDocSourceID = 0
     deflagID = 0
 
-    LogPath = "gdrive/"
+    LogPath = "/gdrive/"
 
     pingTime = 2
     Green = port.PA10
@@ -54,36 +51,45 @@ class Configuration:
     Button5 = port.PG7
 
     green_status_stop = False
+    listen_to_keyboard = True
+
+
+def write(file_name, line):
+    time = addSecs(datetime.datetime.now(), 0)
+    day = datetime.date.today()
+    if os.path.exists(Configuration.LogPath) == False:
+        os.makedirs(Configuration.LogPath)
+    if os.path.exists(file_name):
+        f = open(file_name, "a+")
+    else:
+        f = open(file_name, "w+")
+    f.write(str(day) + " " + str(time) + " - " + line + "\n")
+    f.close()
+
+
+def writeLog(line):
+    try:
+        now = addSecs(datetime.datetime.now(), 0)
+        file_name = Configuration.LogPath + str(Configuration.SystemID) + "_full.log"
+        write(file_name, line)
+    except Exception as init:
+        print(str(init) + str(now))
+
 
 def writeLogError(line):
     try:
-        now = datetime.datetime.now()
+        now = addSecs(datetime.datetime.now(), 0)
         file_name = Configuration.LogPath + str(Configuration.SystemID) + "_errors.log"
-        if os.path.exists(Configuration.LogPath) == False:
-            os.makedirs(Configuration.LogPath)
-        if os.path.exists(file_name):
-            f = open(file_name, "a+")
-        else:
-            f = open(file_name, "w+")
-        f.write(str(now) + " - " + line + "\n")
-        f.close()
+        write(file_name, line)
     except Exception as init:
         print(str(init) + str(now))
 
 
 def writeLogBill(line):
     try:
-        now = datetime.datetime.now()
-        file_name = Configuration.LogPath + str(Configuration.SystemID) + "_bill.log.txt"
-
-        if os.path.exists(Configuration.LogPath) == False:
-            os.makedirs(Configuration.LogPath)
-        if os.path.exists(file_name):
-            f = open(file_name, "a+")
-        else:
-            f = open(file_name, "w+")
-        f.write(str(now) + " - " + line + "\n")
-        f.close()
+        now = addSecs(datetime.datetime.now(), 0)
+        file_name = Configuration.LogPath + str(Configuration.SystemID) + "_bill.log"
+        write(file_name, line)
     except Exception as init:
         print(str(init) + str(now))
 
@@ -109,6 +115,7 @@ def disablePin(pinnumber):
 
 
 def pourCoffee(pinnumber):
+    print("Pouring Coffee")
     enablePin(pinnumber)
     time.sleep(0.5)
     disablePin(pinnumber)
@@ -116,13 +123,13 @@ def pourCoffee(pinnumber):
 
 
 def pouringCoffee():
-    start_time = datetime.datetime.now()
-    end_time = start_time + datetime.timedelta(seconds=15)
-    end_timer = addSecs(end_time, 300)
-    print(start_time)
-    while True:
-        current_time = datetime.datetime.now()
-        current_timer = addSecs(current_time, 300)
+    current_timer = datetime.datetime.now()
+    current_timer = addSecs(current_timer, 0)
+    end_timer = addSecs(current_timer, 3)
+    print("pouringCoffee started:" + str(current_timer))
+    state5 = gpio.input(Configuration.Button5)
+    while state5 == button_pressed or current_timer<end_timer:
+        current_timer = addSecs(datetime.datetime.now(), 0)
 
         disablePin(Configuration.Red)
         enablePin(Configuration.Green)
@@ -131,10 +138,11 @@ def pouringCoffee():
         enablePin(Configuration.Red)
         time.sleep(0.5)
 
-        if current_timer == end_timer:
-            Configuration.green_status_stop = False
-            print(datetime.datetime.now())
-            return
+        #if current_timer >= end_timer:
+        Configuration.green_status_stop = False
+        print("pouringCoffee ended:" + str(current_timer))
+            #return
+        state5 = gpio.input(Configuration.Button5)
 
 
 
@@ -165,10 +173,12 @@ def statusNoMoney():
 
 
 def button5action():
+    '''
     state2 = gpio.input(Configuration.Button2)
-    state4 = gpio.input(Configuration.Button4)
     if state2 == button_pressed:
         pourCoffee(Configuration.Coffee2)
+    '''
+    state4 = gpio.input(Configuration.Button4)
     if state4 == button_pressed:
         pourCoffee(Configuration.Coffee4)
 
@@ -215,6 +225,7 @@ def init():
 
 
 def justDoIt(card):
+    writeLog(card)
     now = datetime.datetime.now()
     hna = str(now.year) + str(now.timetuple().tm_yday)
     c = pymssql.connect(Configuration.IP, Configuration.User, Configuration.Password, "tempdb")
@@ -241,39 +252,48 @@ def justDoIt(card):
             if r[3] == 1:
                 data1[4] = "del"
             if r[4] == 3:
+               	data1[0] = str(r[1])
+            if r[4] == 1:
+                data1[0] = str(r[1])
+            if r[4] == 4:
                 data1[0] = str(r[1])
             data1[1] = str(r[0])
             data1[5] = str(r[5])
             
-            writeLogError(str(r))
+            writeLog(str(r))
 
         except:
             data1[0] = "error"
 
-        dataget = data1
-
-        if str(dataget[0]) == "error":
-            errorLine = "Error" + str(cardCode) + " - " + str(dateget)
+        if str(data1[0]) == "error":
+            errorLine = "Error" + str(cardCode) + " - " + str(data1)
             writeLogError(errorLine)
+            writeLog(errorLine)
             statusNoCard()
             return
-        elif str(dataget[0]) == "nocard":
-            errorLine = "Несуществующий номер карты" + str(cardCode) + " - " + str(dateget)
+        elif str(data1[0]) == "nocard":
+            errorLine = "Несуществующий номер карты" + str(cardCode) + " - " + str(data1)
             writeLogError(errorLine)
+            writeLog(errorLine)
             statusNoCard()
             return
-        elif 3 in dataget:
-            errorLine = "Карта заблокирована" + str(cardCode) + " - " + str(dateget)
+        elif 3 in data1:
+            errorLine = "Карта заблокирована" + str(cardCode) + " - " + str(data1)
+            print(errorLine)
             writeLogError(errorLine + str(cardCode))
+            writeLog(errorLine)
             statusNoCard()
             return
-        elif 4 in dataget:
-            errorLine = "Карта заблокирована" + str(cardCode) + " - " + str(dateget)
+        elif 4 in data1:
+            errorLine = "Карта заблокирована" + str(cardCode) + " - " + str(data1)
+            print(errorLine + "1")
             writeLogError(errorLine)
+            writeLog(errorLine)
             statusNoCard()
             return
     except Exception as inst:
-        writeLogError(inst)
+        print(inst)
+        writeLogError(str(inst))
 
     Configuration.green_status_stop = True
     print(Configuration.green_status_stop)
@@ -283,12 +303,13 @@ def justDoIt(card):
     """
 
     start_time = datetime.datetime.now()
-    end_time = start_time + datetime.timedelta(seconds=10)
-    end_timer = addSecs(end_time, 300)
+    end_timer = addSecs(start_time, 10)
+    button_pressed = 0
+    writeLog("Time to choose button")
 
     while True:
         current_time = datetime.datetime.now()
-        current_timer = addSecs(current_time, 300)
+        current_timer = addSecs(current_time, 0)
 
         state1 = gpio.input(Configuration.Button1)
         state2 = gpio.input(Configuration.Button2)
@@ -296,28 +317,50 @@ def justDoIt(card):
         state4 = gpio.input(Configuration.Button4)
         state5 = gpio.input(Configuration.Button5)
 
-        if current_timer == end_timer:
+        print(str(addSecs(current_time,0)) + " " + str(state1) + " " + str(state2) + " " + str(state3) + " " + str(state4) + " " + str(state5))
+
+        if current_timer >= end_timer:
             Configuration.green_status_stop = False
-            print(Configuration.green_status_stop)
+            print("Nothing pressed")
+            writeLog("Nothing pressed")
             return
         if state1 == button_pressed:
             artCode = Configuration.ArtCode1
+            button_pressed = 1
+            line = "Button 1 pressed - ArtCode " + str(artCode) + " selected"
+            writeLog(line)
+            print(line)
             break
         if state2 == button_pressed:
             artCode = Configuration.ArtCode2
+            button_pressed = 2
+            line = "Button 2 pressed - ArtCode " + str(artCode) + " selected"
+            writeLog(line)
+            print(line)
             break
         if state3 == button_pressed:
             artCode = Configuration.ArtCode3
+            button_pressed = 3
+            line = "Button 3 pressed - ArtCode " + str(artCode) + " selected"
+            writeLog(line)
+            print(line)
             break
         if state4 == button_pressed:
             artCode = Configuration.ArtCode4
+            button_pressed = 4
+            line = "Button 4 pressed - ArtCode " + str(artCode) + " selected"
+            writeLog(line)
+            print(line)
             break
         if state5 == button_pressed:
-            while current_timer <= end_timer:
+            while state5 == button_pressed:
+                state5 = gpio.input(Configuration.Button5)
+                print(str(state1) + " " + str(state2) + " " + str(state3) + " " + str(state4) + " " + str(state5))
                 button5action()
                 time.sleep(0.05)
+            return
         time.sleep(0.05)
-
+    writeLog("Time has ended")
     try:
         SYSTEMID = str(Configuration.SystemID)
         SAREAID = str(Configuration.SareaID)
@@ -331,8 +374,9 @@ def justDoIt(card):
         r = cursor.fetchone()
         if r[0] is not None:
             SALESNUM = r[0] + 1
+        writeLog("SalesNum " + str(r))
     except Exception as inst:
-        writeLogError(inst)
+        writeLogError(str(inst))
 
     try:
         srmax = "SELECT MAX(SRECNUM) FROM DataServer.dbo.sales" \
@@ -341,8 +385,9 @@ def justDoIt(card):
         r = cursor.fetchone()
         if r[0] is not None:
             SRECNUM = r[0] + 1
+        writeLog("SRECNUM " + str(r))
     except Exception as inst:
-        writeLogError(inst)
+        writeLogError(str(inst))
 
     try:
         if artCode is None:
@@ -365,9 +410,11 @@ def justDoIt(card):
         ArtName = str(r[1])
         ArtPackName = str(r[2])
         ArtPackId = str(r[3])
-        ArtPrice = str(r[4])
+        ArtPrice = str(r[4]).split(".",1)[0]
+
+        writeLog("Art Info " + str(r))
     except Exception as inst:
-        writeLogError(inst)
+        writeLogError(str(inst))
 
     try:
         cardCode = str(card)
@@ -385,15 +432,18 @@ def justDoIt(card):
         cursor.execute(balq)
         r = cursor.fetchone()
         clientSumm = str(r[0])
+        clientSumm = clientSumm.split(".", 1)[0]
         clientId = str(r[1])
         clientName = str(r[2])
+
+        writeLog("Client Info " + str(r))
 
         if int(clientSumm) < int(ArtPrice):
             statusNoMoney()
             return
 
     except Exception as inst:
-        writeLogError(inst)
+        writeLogError(str(inst))
 
     ActualSalesCount = 0
     PRCLEVELID = 1
@@ -585,20 +635,26 @@ def justDoIt(card):
         c.commit()
         time.sleep(1)
         line = str(cardCode) + " " + str(clientName) + " " + str(clientId) + " " + str(ArtCode) + " " + str(ArtPrice)
+        print(line)
         writeLogBill(line)
+        writeLog(line)
 
-        if ArtCode == Configuration.ArtCode1:
+        if button_pressed == 1:
             pourCoffee(Configuration.Coffee1)
-        elif ArtCode == Configuration.ArtCode2:
+            print("Send command 1")
+        elif button_pressed == 2:
             pourCoffee(Configuration.Coffee2)
-        elif ArtCode == Configuration.ArtCode3:
+            print("Send command 2")
+        elif button_pressed == 3:
             pourCoffee(Configuration.Coffee3)
-        elif ArtCode == Configuration.ArtCode4:
+            print("Send command 3")
+        elif button_pressed == 4:
             pourCoffee(Configuration.Coffee4)
+            print("Send command 4")
         c.close()
-
+        writeLog("Coffee poured")
     except Exception as inst:
-        writeLogError(inst)
+        writeLogError(str(inst))
 
 
 class Char2Card:
@@ -607,32 +663,45 @@ class Char2Card:
     def __init__(self):
 
         def key_press(key):
-            self.add2line(key.name)
+            if Configuration.listen_to_keyboard == True:
+                self.add2line(key.name)
 
         keyboard.on_press(key_press)
         while True:
             self.mi()
 
     def checkConnection(self):
-        c = pymssql.connect(Configuration.IP, Configuration.User, Configuration.Password, "tempdb")
-        cursor = c.cursor()
-        test = "SELECT 1"
-        cursor.execute(test)
-        r = cursor.fetchone()
-        if r[0] == 1:
-            if Configuration.green_status_stop == False:
+        if Configuration.green_status_stop == False:
+            c = pymssql.connect(Configuration.IP, Configuration.User, Configuration.Password, "tempdb")
+            cursor = c.cursor()
+            test = "SELECT 1"
+            cursor.execute(test)
+            r = cursor.fetchone()
+            if r[0] == 1:
                 statusOnline()
-        else:
-            statusOffline()
-        c.close()
+            else:
+                statusOffline()
+            c.close()
 
     def mi(self):
         while True:
+            print(Configuration.listen_to_keyboard)
             self.checkConnection()
+            #'''
+            state1 = gpio.input(Configuration.Button1)
+            state2 = gpio.input(Configuration.Button2)
+            state3 = gpio.input(Configuration.Button3)
+            state4 = gpio.input(Configuration.Button4)
             state5 = gpio.input(Configuration.Button5)
             while state5 == button_pressed:
+                print(str(addSecs(datetime.datetime.now(), 0)) + " " + str(state1) + " " + str(state2) + " " + str(
+                    state3) + " " + str(state4) + " " + str(state5))
                 button5action()
+
+                state5 = gpio.input(Configuration.Button5)
                 time.sleep(0.05)
+
+            #'''
             time.sleep(0.05)
 
     def add2line(self, a):
@@ -642,7 +711,10 @@ class Char2Card:
             #print(self.line)
             data = self.line
             self.clear()
+            Configuration.listen_to_keyboard = False
             justDoIt(data)
+            Configuration.listen_to_keyboard = True
+
 
     def clear(self):
         self.line = ""
